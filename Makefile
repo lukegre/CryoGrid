@@ -38,15 +38,15 @@ install-aws:  ## Install AWS CLI v2 to ~/.local/bin (if missing)
 		echo "Installation complete. Ensure $(HOME)/.local/bin is in your PATH."; \
 	fi
 	
-forcing: check-aws check-env check-name ## Force download by removing local copy first
+forcing: check-aws check-env check-name ## Download ERA5 forcing data (synced from S3)
 	@echo "Download ERA5 forcing for Pamirs to $(FORCING_DIR)..."
-	mkdir -p $(FORCING_DIR)
-	aws s3 sync $(S3_PATH_FORCING) $(FORCING_DIR) --endpoint-url $(S3_ENDPOINT_URL)
+	@mkdir -p $(FORCING_DIR)
+	@aws s3 sync $(S3_PATH_FORCING) $(FORCING_DIR) --endpoint-url $(S3_ENDPOINT_URL)
 
 dirs: ## Create necessary directories
-	@echo "Creating necessary directories..."
-	mkdir -p $(RUNS_DIR)
-	ln -snf $(RUNS_DIR) $(HOME)/cryogrid-runs
+	@echo "Creating necessary directories and adding symlink - $(HOME)/cryogrid-runs..."
+	@mkdir -p $(RUNS_DIR)
+	@ln -snf $(RUNS_DIR) $(HOME)/cryogrid-runs
 
 init: dirs install-aws forcing  ## Setup scratch symlinks
 	@echo "Initialization complete."

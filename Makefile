@@ -48,13 +48,14 @@ install-aws:
 	fi
 	
 forcing: check-aws check-env check-name 
-	@echo "Download ERA5 forcing for Pamirs to $(FORCING_DIR)..."
+	@echo "Syncing cryogrid-forcing from $(S3_PATH_FORCING) to $(FORCING_DIR)"
 	@mkdir -p $(FORCING_DIR)
 	@aws s3 sync $(S3_PATH_FORCING) $(FORCING_DIR) --endpoint-url $(S3_ENDPOINT_URL) --color on
 
 dirs: 
-	@echo "Creating necessary directories and adding symlink - $(HOME)/cryogrid-runs..."
+	@echo "Creating runs directory -> $(RUNS_DIR)"
 	@mkdir -p "$(abspath $(RUNS_DIR))"
+	@echo "Creating symlink -> CryoGrid/cryogrid-runs"
 	@ln -snf "$(abspath $(RUNS_DIR))" "./cryogrid-runs"
 
 init: dirs install-aws forcing  ## Setup scratch symlinks
@@ -62,16 +63,16 @@ init: dirs install-aws forcing  ## Setup scratch symlinks
 	
 	
 download-run: check-aws check-env check-name ## Sync files from S3 to local scratch
-	@echo "Downloading $(S3_PATH)"
+	@echo "Downloading $(S3_PATH) to $(LOCAL_PATH)"
 	@mkdir -p $(LOCAL_PATH)
 	@aws s3 sync $(S3_PATH) $(LOCAL_PATH) --endpoint-url $(S3_ENDPOINT_URL) --color on
 
 upload-run: check-aws check-env check-name ## Sync local scratch results to S3
-	@echo "Uploading $(LOCAL_PATH)..."
+	@echo "Uploading $(LOCAL_PATH) to $(S3_PATH)"
 	@aws s3 sync $(LOCAL_PATH) $(S3_PATH) --endpoint-url $(S3_ENDPOINT_URL) --color on
 
 submit-run: check-name ## Submit the SLURM job
-	@echo "Submitting $(RUN_NAME)..."
+	@echo "Submitting $(RUN_NAME) located at $(LOCAL_PATH)"
 	@cd $(LOCAL_PATH) && sbatch sbatch_submit.sh
 
 # --- Guards & Helpers ---

@@ -5,12 +5,12 @@ export
 # --- Configuration ---
 # S3 paths
 S3_PATH_PREFIX  := s3://spi-pamir-cryogrid/cryogrid_runs-luke
-S3_PATH_FORCING := s3://spi-pamir-cryogrid/forcing/era5-pamirs-1990_2024-v251113.mat
+S3_PATH_FORCING := s3://spi-pamir-cryogrid/forcing/
 # local paths on Euler
 # if SCRATCH is not set, default to $(HOME)
 WORKING_DIR     := $(or $(SCRATCH),$(HOME))
 RUNS_DIR        := $(WORKING_DIR)/cryogrid-runs
-FORCING_DIR     := $(HOME)/cryogrid-forcing
+FORCING_DIR     := $(HOME)/cryogrid-forcing/
 
 # S3 related settings
 export S3_ENDPOINT_URL := https://os.zhdk.cloud.switch.ch
@@ -29,7 +29,7 @@ help: ## Show this help message
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "   \033[36m%-15s\033[0m  %s\n", $$1, $$2}'
 	@echo "\033[1mCONFIGURATION\033[0m"
 	@echo "   RUN_NAME         \033[1;33m$(RUN_NAME)\033[0m"
-	@echo "   LOCAL_PATH       \033[33m$(LOCAL_PATH)\033[0m"
+	@echo "   RUNS_DIR         \033[33m$(RUNS_DIR)\033[0m"
 	@echo "   FORCING_DIR      \033[33m$(FORCING_DIR)\033[0m"
 	@echo "   S3_PATH          \033[33m$(S3_PATH)\033[0m"
 	@echo "   S3_PATH_FORCING  \033[33m$(S3_PATH_FORCING)\033[0m"
@@ -55,7 +55,7 @@ forcing: check-aws check-env check-name ## Download ERA5 forcing data (synced fr
 dirs: ## Create necessary directories
 	@echo "Creating necessary directories and adding symlink - $(HOME)/cryogrid-runs..."
 	@mkdir -p $(RUNS_DIR)
-	@ln -snf $(RUNS_DIR) $(HOME)/cryogrid-runs
+	@ln -snf $(RUNS_DIR) ./cryogrid-runs
 
 init: dirs install-aws forcing  ## Setup scratch symlinks
 	@echo "Initialization complete."
@@ -72,7 +72,7 @@ upload: check-aws check-env check-name ## Sync local scratch results to S3
 
 submit: check-name ## Submit the SLURM job
 	@echo "Submitting $(RUN_NAME)..."
-	cd $(LOCAL_PATH) && sbatch sbatch_submit.sh
+	@cd $(LOCAL_PATH) && sbatch sbatch_submit.sh
 
 # --- Guards & Helpers ---
 check-aws:

@@ -22,8 +22,6 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 init: ## Clone repo and setup scratch symlinks
-	@echo "Cloning CryoGrid repository..."
-	git clone --depth 1 $(REPO_URL) $(HOME)/CryoGrid
 	@echo "Setting up scratch directories..."
 	mkdir -p $(RUNS_DIR)
 	ln -snf $(RUNS_DIR) $(HOME)/cryogrid-runs

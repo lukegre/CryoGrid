@@ -35,7 +35,7 @@ help: ## Show this help message
 	@echo "   S3_PATH_FORCING  \033[33m$(S3_PATH_FORCING)\033[0m"
 	
 
-install-aws:  ## Install AWS CLI v2 to ~/.local/bin (if missing)
+install-aws:  
 	@if command -v aws >/dev/null 2>&1; then \
 		echo "AWS CLI already installed. Skipping."; \
 	else \
@@ -47,12 +47,12 @@ install-aws:  ## Install AWS CLI v2 to ~/.local/bin (if missing)
 		echo "Installation complete. Ensure $(HOME)/.local/bin is in your PATH."; \
 	fi
 	
-forcing: check-aws check-env check-name ## Download ERA5 forcing data (synced from S3)
+forcing: check-aws check-env check-name 
 	@echo "Download ERA5 forcing for Pamirs to $(FORCING_DIR)..."
 	@mkdir -p $(FORCING_DIR)
 	@aws s3 sync $(S3_PATH_FORCING) $(FORCING_DIR) --endpoint-url $(S3_ENDPOINT_URL) --color on
 
-dirs: ## Create necessary directories
+dirs: 
 	@echo "Creating necessary directories and adding symlink - $(HOME)/cryogrid-runs..."
 	@mkdir -p "$(abspath $(RUNS_DIR))"
 	@ln -snf "$(abspath $(RUNS_DIR))" "$(HOME)/cryogrid-runs"

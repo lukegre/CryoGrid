@@ -25,10 +25,9 @@ S3_PATH    := $(S3_PATH_PREFIX)/$(RUN_NAME)/
 .PHONY: help init install-aws download upload submit check-env check-name check-aws
 
 help: ## Show this help message
-	@echo "Usage: make [target] [name=run-name]"
+	@echo "\033[1mUSAGE: make [target] [name=run-name]\033[0m"
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "   \033[36m%-15s\033[0m  %s\n", $$1, $$2}'
-	@echo ""
-	@echo "Current Configuration:"
+	@echo "\033[1mCONFIGURATION\033[0m"
 	@echo "   RUN_NAME         \033[1;33m$(RUN_NAME)\033[0m"
 	@echo "   LOCAL_PATH       \033[33m$(LOCAL_PATH)\033[0m"
 	@echo "   FORCING_DIR      \033[33m$(FORCING_DIR)\033[0m"

@@ -54,8 +54,8 @@ forcing: check-aws check-env check-name ## Download ERA5 forcing data (synced fr
 
 dirs: ## Create necessary directories
 	@echo "Creating necessary directories and adding symlink - $(HOME)/cryogrid-runs..."
-	@mkdir -p $(RUNS_DIR)
-	@ln -snf $(RUNS_DIR) ./cryogrid-runs
+	@mkdir -p "$(abspath $(RUNS_DIR))"
+	@ln -snf "$(abspath $(RUNS_DIR))" "$(HOME)/cryogrid-runs"
 
 init: dirs install-aws forcing  ## Setup scratch symlinks
 	@echo "Initialization complete."

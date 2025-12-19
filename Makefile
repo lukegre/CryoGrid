@@ -7,8 +7,10 @@ export
 S3_PATH_PREFIX  := s3://spi-pamir-cryogrid/cryogrid_runs-luke
 S3_PATH_FORCING := s3://spi-pamir-cryogrid/forcing/era5-pamirs-1990_2024-v251113.mat
 # local paths on Euler
-RUNS_DIR        := $(SCRATCH)/cryogrid-runs/
-FORCING_DIR     := $(HOME)/cryogrid-forcing/
+# if SCRATCH is not set, default to $(HOME)
+WORKING_DIR     := $(or $(SCRATCH),$(HOME))
+RUNS_DIR        := $(WORKING_DIR)/cryogrid-runs
+FORCING_DIR     := $(HOME)/cryogrid-forcing
 
 # S3 related settings
 export S3_ENDPOINT_URL := https://os.zhdk.cloud.switch.ch
@@ -24,7 +26,15 @@ S3_PATH    := $(S3_PATH_PREFIX)/$(RUN_NAME)/
 
 help: ## Show this help message
 	@echo "Usage: make [target] [name=run-name]"
-	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "   \033[36m%-15s\033[0m  %s\n", $$1, $$2}'
+	@echo ""
+	@echo "Current Configuration:"
+	@echo "   RUN_NAME         \033[1;33m$(RUN_NAME)\033[0m"
+	@echo "   LOCAL_PATH       \033[33m$(LOCAL_PATH)\033[0m"
+	@echo "   FORCING_DIR      \033[33m$(FORCING_DIR)\033[0m"
+	@echo "   S3_PATH          \033[33m$(S3_PATH)\033[0m"
+	@echo "   S3_PATH_FORCING  \033[33m$(S3_PATH_FORCING)\033[0m"
+	
 
 install-aws:  ## Install AWS CLI v2 to ~/.local/bin (if missing)
 	@if command -v aws >/dev/null 2>&1; then \

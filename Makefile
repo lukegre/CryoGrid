@@ -54,13 +54,13 @@ init: dirs install-aws forcing  ## Setup scratch symlinks
 	
 download: check-aws check-env check-name ## Sync files from S3 to local scratch
 	@echo "Downloading $(RUN_NAME)..."
-	mkdir -p $(LOCAL_PATH)
-	aws s3 sync $(S3_PATH) $(LOCAL_PATH) --endpoint-url $(S3_ENDPOINT_URL)
+	@mkdir -p $(LOCAL_PATH)
+	@aws s3 sync $(S3_PATH) $(LOCAL_PATH) --endpoint-url $(S3_ENDPOINT_URL)
 
 upload: check-aws check-env check-name ## Sync local scratch results to S3
 	@echo "Uploading $(RUN_NAME)..."
-	aws s3 sync $(LOCAL_PATH) $(S3_PATH) --endpoint-url $(S3_ENDPOINT_URL)
-
+	@aws s3 sync $(LOCAL_PATH) $(S3_PATH) --endpoint-url $(S3_ENDPOINT_URL)
+	
 submit: check-name ## Submit the SLURM job
 	@echo "Submitting $(RUN_NAME)..."
 	cd $(LOCAL_PATH) && sbatch sbatch_submit.sh

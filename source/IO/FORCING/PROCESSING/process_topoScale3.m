@@ -5,6 +5,7 @@
 %
 % Authors:
 % S. Westermann, December 2022
+% L. Gregor, Dec 2025 - added "downscale_below_era5_surface" option that allows downscaling below ERA5 surface level
 %
 %========================================================================
 
@@ -32,7 +33,7 @@ classdef process_topoScale3 < process_BASE
         function proc = provide_CONST(proc)
             proc.CONST.Tmfw = [];
             proc.CONST.sigma = [];
-            proc.CONST.limit_above_orography = 1;
+            proc.CONST.downscale_below_era5_surface = 0;
         end
         
         function proc = provide_STATVAR(proc)
@@ -43,7 +44,7 @@ classdef process_topoScale3 < process_BASE
         
         function forcing = process(proc, forcing, tile)
             
-            disp('applying downscaling with TopoScale')
+            disp('applying downscaling with TopoScale3')
             era = forcing.TEMP.era;
 
             lat_point = forcing.SPATIAL.STATVAR.latitude;
@@ -67,8 +68,8 @@ classdef process_topoScale3 < process_BASE
             era_alt_sl = reshape(era.Zs(inds.lon, inds.lat), n_coords, 1);
             era_alt_sl = repmat(era_alt_sl, 1, 1, n_timesteps);  % lat_lon, level, timestep
             
-            limit_above_orography = proc.CONST.limit_above_orography;
-            [weights_Z_below, weights_Z_above, factor] = proc.calc_vert_weights(point.alt, era_alt, era_alt_sl, n_levels, limit_above_orography);
+            downscale_below_era5_surface = proc.CONST.downscale_below_era5_surface;
+            [weights_Z_below, weights_Z_above, factor] = proc.calc_vert_weights(point.alt, era_alt, era_alt_sl, n_levels, downscale_below_era5_surface);
             weights = struct('lat', weights_lat, 'lon', weights_lon, 'Z_above', weights_Z_above, 'Z_below', weights_Z_below, 'factor', factor);
             
 
@@ -84,7 +85,9 @@ classdef process_topoScale3 < process_BASE
             era_T_sl = select_surf(era.T2) .* era.T_sf;
             % downscale_3D first does vertical downscaling, then horizontal using downscale_2D
             % downscale_3D -> (t x 1)
-            T_topoScale = proc.downscale_3D_var(era_T, era_T_sl, weights, point.alt, era_alt_sl);
+            T_topoScale = proc.downscale_3D_var(era_T, era_T_sl, weights, point.alt, era_alt_sl, downscale_below_era5_surface);
+            % for testing
+            era_T_sl_downscaled = proc.downscale_2D_var(era_T_sl, weights);
             
             
             % DOWNSCALING WIND SPEED
@@ -94,7 +97,7 @@ classdef process_topoScale3 < process_BASE
             era_v10 = select_surf(era.v10) .* era.wind_sf;
             era_wind = proc.calc_wind_speed(era_u, era_v);
             era_wind_sl = proc.calc_wind_speed(era_u10, era_v10);
-            wind_topoScale = proc.downscale_3D_var(era_wind, era_wind_sl, weights, point.alt, era_alt_sl);
+            wind_topoScale = proc.downscale_3D_var(era_wind, era_wind_sl, weights, point.alt, era_alt_sl, downscale_below_era5_surface);
             
 
             % DOWNSCALING PRESSURE
@@ -239,12 +242,12 @@ classdef process_topoScale3 < process_BASE
             
         end
         
-        function [weights_above, weights_below, factor] = calc_vert_weights(alt_point, era_alt, era_alt_sl, n_levels, limit_above_orography)
+        function [weights_above, weights_below, factor] = calc_vert_weights(alt_point, era_alt, era_alt_sl, n_levels, downscale_below_era5_surface)
             
             if nargin <= 4
-                limit_above_orography = 1;
+                downscale_below_era5_surface = 1;
             elseif nargin == 5
-                assert(limit_above_orography == 0 | limit_above_orography == 1, "limit_above_orography must be [0,1]");
+                assert(downscale_below_era5_surface == 0 | downscale_below_era5_surface == 1, "downscale_below_era5_surface must be [0,1]");
             end
             layer_below = int16(era_alt .* 0);
             layer_above = int16(era_alt .* 0);
@@ -258,7 +261,7 @@ classdef process_topoScale3 < process_BASE
                 grid0_gt_point = level_b >= alt_point;
                 
                 % this is added so that valleys can also be included for very mountainous areas
-                if limit_above_orography
+                if downscale_below_era5_surface
                     a_above_orography = level_a > era_alt_sl;
                     b_above_orography = level_b > era_alt_sl;
                 else
@@ -283,8 +286,14 @@ classdef process_topoScale3 < process_BASE
             
         end
         
-        function var = downscale_3D_var(var4d, var_surf, weights, alt_point, era_alt_sl)
+        function var = downscale_3D_var(var4d, var_surf, weights, alt_point, era_alt_sl, downscale_below_era5_surface)
             class = process_topoScale3;
+
+            if nargin <= 5
+                downscale_below_era5_surface = 1;
+            elseif nargin == 6
+                assert(downscale_below_era5_surface == 0 | downscale_below_era5_surface == 1, "downscale_below_era5_surface must be [0,1]");
+            end
 
             % Function can be applied to temperature (T), wind, and humidity (q)
             % takes var3d where variables have already been selected
@@ -292,21 +301,23 @@ classdef process_topoScale3 < process_BASE
             % VARIABLE PREPARATION
             [n_lon, n_lat, n_levels, n_timesteps] = size(var4d);
             var3d = reshape(var4d, n_lon * n_lat, n_levels, n_timesteps);
-            var_surf = double(reshape(var_surf, n_lon * n_lat, 1, n_timesteps));  % check that 1 is correct
+            var_surf = double(reshape(var_surf, n_lon * n_lat, 1, n_timesteps));  
             
             % WEIGHT PREPARATION
             weights_Z = weights.Z_above + weights.Z_below;
             
             % VERTICAL DOWNSCALING
-            % T_topoScale = sum(double(era_T) .*  (weights_Z_above + weights_Z_below), 2);
             var3d = sum(double(var3d) .* weights_Z, 2);
             
             % This part needs to change if we don't want the bottom layer to be used
-            use_sl = sum(weights_Z, 2) < 1-1e-9   |   alt_point < era_alt_sl;
+            if downscale_below_era5_surface
+                is_above_orography = alt_point < era_alt_sl;
+            else
+                is_above_orography = 0;
+            end
+            use_sl = sum(weights_Z, 2) < 1-1e-9   |   is_above_orography;
             merge_w_sl = sum(weights.Z_below, 2) == 0;
-            
-            % T_topoScale = double(~merge_w_sl) .* T_topoScale + double(merge_w_sl) .* factor .* T_topoScale + double(merge_w_sl) .* (1-factor) .* double(era_T_sl);
-            % T_topoScale = double(~use_sl) .* T_topoScale + double(use_sl) .* double(era_T_sl);
+
             term1 = double(~merge_w_sl) .* var3d;
             term2 = double( merge_w_sl) .* var3d .* weights.factor;
             term3 = double( merge_w_sl) .* var_surf .* (1 - weights.factor);

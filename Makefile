@@ -35,7 +35,7 @@ install-aws: ## Install AWS CLI v2 to ~/.local/bin
 	@rm -rf aws awscliv2.zip
 	@echo "Installation complete. Ensure $(HOME)/.local/bin is in your PATH."
 
-download-forcing: check-aws check-env check-name ## Force download by removing local copy first
+forcing: check-aws check-env check-name ## Force download by removing local copy first
 	@echo "Download ERA5 forcing for Pamirs..."
 	mkdir -p $(FORCING_DIR)
 	aws s3 sync $(S3_PATH_FORCING) $(FORCING_DIR) --endpoint-url $(S3_ENDPOINT_URL)

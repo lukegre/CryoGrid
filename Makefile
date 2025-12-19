@@ -3,10 +3,13 @@
 export
 
 # --- Configuration ---
+# S3 paths
 S3_ENDPOINT_URL := https://os.zhdk.cloud.switch.ch
 S3_PATH_PREFIX  := s3://spi-pamir-cryogrid/cryogrid_runs-luke
+S3_PATH_FORCING := s3://spi-pamir-cryogrid/forcing/era5-pamirs-1990_2024-v251113.mat
+# local paths
 RUNS_DIR        := /cluster/scratch/$(USER)/cryogrid-runs
-REPO_URL        := https://github.com/lukegre/CryoGrid.git
+FORCING_DIR     := ${HOME}/cryogrid-forcing/
 
 # S3 integrity fixes
 export AWS_REQUEST_CHECKSUM_CALCULATION := WHEN_REQUIRED
@@ -21,10 +24,9 @@ S3_PATH    := $(S3_PATH_PREFIX)/$(RUN_NAME)/
 
 help: ## Show this help message
 	@echo "Usage: make [target] [name=run-name]"
-	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-install-aws: ## Install AWS CLI v2 to ~/.local/bin (Linux x86_64)
+install-aws: ## Install AWS CLI v2 to ~/.local/bin
 	@echo "Downloading AWS CLI installer..."
 	curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 	unzip -q awscliv2.zip
@@ -33,10 +35,16 @@ install-aws: ## Install AWS CLI v2 to ~/.local/bin (Linux x86_64)
 	@rm -rf aws awscliv2.zip
 	@echo "Installation complete. Ensure $(HOME)/.local/bin is in your PATH."
 
-init: install-aws ## Setup repo and scratch symlinks
-	@echo "Making runs folder"
+download-forcing: check-aws check-env check-name ## Force download by removing local copy first
+	@echo "Download ERA5 forcing for Pamirs..."
+	mkdir -p $(FORCING_DIR)
+	aws s3 sync $(S3_PATH_FORCING) $(FORCING_DIR) --endpoint-url $(S3_ENDPOINT_URL)
+
+init: ## Setup scratch symlinks
 	mkdir -p $(RUNS_DIR)
 	ln -snf $(RUNS_DIR) $(HOME)/cryogrid-runs
+	${MAKE} install-aws
+	${MAKE} download-forcing
 
 download: check-aws check-env check-name ## Sync files from S3 to local scratch
 	@echo "Downloading $(RUN_NAME)..."

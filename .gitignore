@@ -50,3 +50,4 @@ octave-workspace
 .autosave
 source.zip
 .DS_Store
+.env

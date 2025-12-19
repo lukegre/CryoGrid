@@ -50,3 +50,5 @@ octave-workspace
 .autosave
 source.zip
 .DS_Store
+
+pdf_code/*.pdf

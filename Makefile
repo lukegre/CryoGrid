@@ -26,25 +26,28 @@ help: ## Show this help message
 	@echo "Usage: make [target] [name=run-name]"
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-install-aws: ## Install AWS CLI v2 to ~/.local/bin
+install-aws:  ## Install AWS CLI v2 to ~/.local/bin
+	@command -v aws >/dev/null 2>&1 && { echo "AWS CLI already installed."; exit 0; }
+
 	@echo "Downloading AWS CLI installer..."
 	curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 	unzip -q awscliv2.zip
+	
 	@echo "Installing to $(HOME)/.local/bin..."
 	./aws/install -i $(HOME)/.aws-cli -b $(HOME)/.local/bin --update
-	@rm -rf aws awscliv2.zip
 	@echo "Installation complete. Ensure $(HOME)/.local/bin is in your PATH."
 
 forcing: check-aws check-env check-name ## Force download by removing local copy first
-	@echo "Download ERA5 forcing for Pamirs..."
+	@echo "Download ERA5 forcing for Pamirs to $(FORCING_DIR)..."
 	mkdir -p $(FORCING_DIR)
 	aws s3 sync $(S3_PATH_FORCING) $(FORCING_DIR) --endpoint-url $(S3_ENDPOINT_URL)
 
 init: ## Setup scratch symlinks
+	@echo "Initializing cryogrid-runs symlink in home directory..."
 	mkdir -p $(RUNS_DIR)
 	ln -snf $(RUNS_DIR) $(HOME)/cryogrid-runs
 	${MAKE} install-aws
-	${MAKE} download-forcing
+	${MAKE} forcing
 
 download: check-aws check-env check-name ## Sync files from S3 to local scratch
 	@echo "Downloading $(RUN_NAME)..."

@@ -9,7 +9,7 @@ S3_PATH_PREFIX  := s3://spi-pamir-cryogrid/cryogrid_runs-luke
 S3_PATH_FORCING := s3://spi-pamir-cryogrid/forcing/era5-pamirs-1990_2024-v251113.mat
 # local paths
 RUNS_DIR        := /cluster/scratch/$(USER)/cryogrid-runs
-FORCING_DIR     := ${HOME}/cryogrid-forcing/
+FORCING_DIR     := $(HOME)/cryogrid-forcing/
 
 # S3 integrity fixes
 export AWS_REQUEST_CHECKSUM_CALCULATION := WHEN_REQUIRED

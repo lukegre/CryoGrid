@@ -55,8 +55,8 @@ forcing: check-aws check-env check-name
 dirs: 
 	@echo "Creating runs directory -> $(RUNS_DIR)"
 	@mkdir -p "$(abspath $(RUNS_DIR))"
-	@echo "Creating symlink -> CryoGrid/cryogrid-runs"
-	@ln -snf "$(abspath $(RUNS_DIR))" "./cryogrid-runs"
+	@echo "Creating symlink -> CryoGrid/runs"
+	@ln -snf "$(abspath $(RUNS_DIR))" "./runs"
 
 init: dirs install-aws forcing  ## Setup scratch symlinks
 	@echo "Initialization complete."

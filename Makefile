@@ -8,7 +8,7 @@ S3_PATH_PREFIX  := s3://spi-pamir-cryogrid/cryogrid_runs-luke
 RUNS_DIR        := /cluster/scratch/$(USER)/cryogrid-runs
 REPO_URL        := https://github.com/lukegre/CryoGrid.git
 
-# S3 integrity fixes for newer AWS CLI versions
+# S3 integrity fixes
 export AWS_REQUEST_CHECKSUM_CALCULATION := WHEN_REQUIRED
 export AWS_RESPONSE_CHECKSUM_VALIDATION := WHEN_REQUIRED
 
@@ -17,25 +17,33 @@ RUN_NAME   := $(or $(name),$(CRYOGRID_RUN_NAME))
 LOCAL_PATH := $(RUNS_DIR)/$(RUN_NAME)
 S3_PATH    := $(S3_PATH_PREFIX)/$(RUN_NAME)/
 
-.PHONY: help init download upload submit check-env check-name
+.PHONY: help init install-aws download upload submit check-env check-name check-aws
 
 help: ## Show this help message
 	@echo "Usage: make [target] [name=run-name]"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-init: ## Setup repo and scratch symlinks
-	@echo "Cloning CryoGrid..."
-	git clone --depth 1 $(REPO_URL) $(HOME)/CryoGrid
+install-aws: ## Install AWS CLI v2 to ~/.local/bin (Linux x86_64)
+	@echo "Downloading AWS CLI installer..."
+	curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+	unzip -q awscliv2.zip
+	@echo "Installing to $(HOME)/.local/bin..."
+	./aws/install -i $(HOME)/.aws-cli -b $(HOME)/.local/bin --update
+	@rm -rf aws awscliv2.zip
+	@echo "Installation complete. Ensure $(HOME)/.local/bin is in your PATH."
+
+init: install-aws ## Setup repo and scratch symlinks
+	@echo "Making runs folder"
 	mkdir -p $(RUNS_DIR)
 	ln -snf $(RUNS_DIR) $(HOME)/cryogrid-runs
 
-download: check-env check-name ## Sync files from S3 to local scratch
+download: check-aws check-env check-name ## Sync files from S3 to local scratch
 	@echo "Downloading $(RUN_NAME)..."
 	mkdir -p $(LOCAL_PATH)
 	aws s3 sync $(S3_PATH) $(LOCAL_PATH) --endpoint-url $(S3_ENDPOINT_URL)
 
-upload: check-env check-name ## Sync local scratch results to S3
+upload: check-aws check-env check-name ## Sync local scratch results to S3
 	@echo "Uploading $(RUN_NAME)..."
 	aws s3 sync $(LOCAL_PATH) $(S3_PATH) --endpoint-url $(S3_ENDPOINT_URL)
 
@@ -43,7 +51,10 @@ submit: check-name ## Submit the SLURM job
 	@echo "Submitting $(RUN_NAME)..."
 	cd $(LOCAL_PATH) && sbatch sbatch_submit.sh
 
-# --- Guards ---
+# --- Guards & Helpers ---
+
+check-aws:
+	@command -v aws >/dev/null 2>&1 || { echo >&2 "Error: AWS CLI not found. Run 'make install-aws' first."; exit 1; }
 
 check-env:
 ifndef AWS_ACCESS_KEY_ID

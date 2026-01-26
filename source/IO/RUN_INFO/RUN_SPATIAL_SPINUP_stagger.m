@@ -78,7 +78,7 @@ classdef RUN_SPATIAL_SPINUP_stagger < matlab.mixin.Copyable
         function [run_info, tile] = run_model_parallel(run_info)
             tile = 0;
             worker_number = spmdIndex();
-
+            
             pause_duration = (worker_number-1) * run_info.PARA.stagger_interval;
             fprintf('Worker %d pausing for %d seconds to stagger start times...\n', worker_number, pause_duration);
             pause(pause_duration); %stagger worker start times to reduce file access conflicts
@@ -91,7 +91,6 @@ classdef RUN_SPATIAL_SPINUP_stagger < matlab.mixin.Copyable
 
             if worker_number <= size(run_raster,1)
                 for run_number = run_raster(worker_number,1):run_raster(worker_number,2)
-                    disp(['running grid cell ' num2str(run_number)])
                     [run_info, tile] = run_TILE(run_info, worker_number, run_number);
                 end
             end
@@ -100,8 +99,6 @@ classdef RUN_SPATIAL_SPINUP_stagger < matlab.mixin.Copyable
         function [run_info, tile] = run_model_sequential(run_info)
             tile = 0;
             for run_number = 1:size(run_info.SPATIAL.STATVAR.key,1)
-
-                disp(['running grid cell ' num2str(run_number)])
                 [run_info, tile] = run_TILE(run_info, 1, run_number);
             end
         end
@@ -132,9 +129,36 @@ classdef RUN_SPATIAL_SPINUP_stagger < matlab.mixin.Copyable
     end
 
     methods (Access = private)
+        function name = make_final_tile_output_fname(run_info, run_number)
+            % This is quite an ugly function in that it doesn't generalise
+            % to other configs, but it does the trick - creates the
+            % filename of the final output
+            
+            run_name = run_info.PPROVIDER.PARA.run_name;
+            classes = run_info.PPROVIDER.CLASSES;
+            
+            start_end_time_forcing_classes = classes.set_start_end_time;
+            num_classes = length(start_end_time_forcing_classes);
+            start_end_time = start_end_time_forcing_classes{num_classes};
+            end_time_vector = start_end_time.PARA.end_time;
+            end_time_str = join(string(end_time_vector), "");
+
+            stem = join(string([run_name; run_number; end_time_str]), "_");
+            name = join(string([stem; ".mat"]), "");
+        end
+
         function [run_info, tile] = run_TILE(run_info, worker_number, run_number)
             % Shared spin-up sequence across TILE parallel/sequential.
-            tile = 0;
+
+            fname = make_final_tile_output_fname(run_info, run_number);
+            
+            if isfile(fname)
+                fprintf("Final output found, skipping run [run_number=%d]\n", run_number)
+                tile = 0;
+                return 
+            end
+
+            disp(['running grid cell ' num2str(run_number)])
             for i=1:size(run_info.PARA.tile_class,1)
                 disp(['running tile number ' num2str(i)])
                 for j=1:run_info.PARA.number_of_runs_per_tile(i,1)
@@ -154,7 +178,7 @@ classdef RUN_SPATIAL_SPINUP_stagger < matlab.mixin.Copyable
 
                     tile.PARA.worker_number = worker_number;
                     tile.PARA.range = run_number;
-
+                    
                     tile = run_model(tile);  %time integration
                 
                 end

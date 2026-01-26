@@ -28,11 +28,11 @@ help: ## Show this help message
 	@echo "\033[1mUSAGE: make [target] [name=run-name]\033[0m"
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "   \033[36m%-15s\033[0m  %s\n", $$1, $$2}'
 	@echo "\033[1mCONFIGURATION\033[0m"
-	@echo "   RUN_NAME         \033[1;33m$(RUN_NAME)\033[0m"
-	@echo "   RUNS_DIR         \033[33m$(RUNS_DIR)\033[0m"
-	@echo "   FORCING_DIR      \033[33m$(FORCING_DIR)\033[0m"
-	@echo "   S3_PATH          \033[33m$(S3_PATH)\033[0m"
-	@echo "   S3_PATH_FORCING  \033[33m$(S3_PATH_FORCING)\033[0m"
+	@echo "   CRYOGRID_RUN_NAME  \033[1;33m$(RUN_NAME)\033[0m"
+	@echo "   RUNS_DIR           \033[33m$(RUNS_DIR)\033[0m"
+	@echo "   FORCING_DIR        \033[33m$(FORCING_DIR)\033[0m"
+	@echo "   S3_PATH            \033[33m$(S3_PATH)\033[0m"
+	@echo "   S3_PATH_FORCING    \033[33m$(S3_PATH_FORCING)\033[0m"
 	
 
 install-aws:  

@@ -18,9 +18,11 @@ export AWS_REQUEST_CHECKSUM_CALCULATION := WHEN_REQUIRED
 export AWS_RESPONSE_CHECKSUM_VALIDATION := WHEN_REQUIRED
 
 # Variable priority: 1. CLI (name=x) 2. .env (CRYOGRID_RUN_NAME)
+LAST_DATE  := 20241231
 RUN_NAME   := $(or $(name),$(CRYOGRID_RUN_NAME))
 LOCAL_PATH := $(RUNS_DIR)/$(RUN_NAME)
 S3_PATH    := $(S3_PATH_PREFIX)/$(RUN_NAME)/
+NAME_TEMPLATE := $(RUN_NAME)_*_$(LAST_DATE).mat  # pamir1500-mswep-dry_*_20241231.mat
 
 .PHONY: help init install-aws download upload submit check-env check-name check-aws
 
@@ -33,6 +35,7 @@ help: ## Show this help message
 	@echo "   FORCING_DIR        \033[33m$(FORCING_DIR)\033[0m"
 	@echo "   S3_PATH            \033[33m$(S3_PATH)\033[0m"
 	@echo "   S3_PATH_FORCING    \033[33m$(S3_PATH_FORCING)\033[0m"
+	@echo "   NAME_TEMPLATE      \033[33m$(NAME_TEMPLATE)\033[0m"
 	
 
 install-aws:  
@@ -60,8 +63,7 @@ dirs:
 
 init: dirs install-aws forcing  ## Setup scratch symlinks
 	@echo "Initialization complete."
-	
-	
+		
 download-run: check-aws check-env check-name ## Sync files from S3 to local scratch
 	@echo "Downloading $(S3_PATH) to $(LOCAL_PATH)"
 	@mkdir -p $(LOCAL_PATH)
@@ -74,6 +76,10 @@ upload-run: check-aws check-env check-name ## Sync local scratch results to S3
 submit-run: check-name ## Submit the SLURM job
 	@echo "Submitting $(RUN_NAME) located at $(LOCAL_PATH)"
 	@cd $(LOCAL_PATH) && sbatch sbatch_submit.sh
+
+check-progress: check-name  ## Check number of files in the run directory
+	$(eval NFILES=$(shell ls -1 $(LOCAL_PATH)/$(NAME_TEMPLATE) 2>/dev/null | wc -l))
+	@echo "Number of files: $(NFILES)"
 
 # --- Guards & Helpers ---
 check-aws:

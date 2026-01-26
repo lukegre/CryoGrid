@@ -62,7 +62,7 @@ classdef RUN_SPATIAL_SPINUP_stagger < matlab.mixin.Copyable
             if run_info.PARA.number_of_cores > 1
                 poolobj = gcp('nocreate'); % If no pool, do not create new one.
                 if isempty(poolobj)
-                    parpool(run_info.PARA.number_of_cores)
+                    parpool("Processes", run_info.PARA.number_of_cores)
                 end
 
                 spmd

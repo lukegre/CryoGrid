@@ -52,3 +52,5 @@ source.zip
 .DS_Store
 
 .env
+cryogrid-runs
+runs

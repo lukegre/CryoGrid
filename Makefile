@@ -81,6 +81,13 @@ check-progress: check-name  ## Check number of files in the run directory
 	$(eval NFILES=$(shell ls -1 $(LOCAL_PATH)/$(NAME_TEMPLATE) 2>/dev/null | wc -l))
 	@echo "Number of files: $(NFILES)"
 
+show-logs: check-name  ## Show the SLURM log file
+	@tail -n 50 $(LOCAL_PATH)/log_slurm_job.err
+	@echo ""
+	@echo "==================================================="
+	@echo ""
+	@tail -n 50 $(LOCAL_PATH)/log_slurm_job.out
+
 # --- Guards & Helpers ---
 check-aws:
 	@command -v aws >/dev/null 2>&1 || { echo >&2 "Error: AWS CLI not found. Run 'make install-aws' first."; exit 1; }

@@ -59,6 +59,8 @@ classdef RUN_SPATIAL_SPINUP_stagger < matlab.mixin.Copyable
         end
 
         function [run_info, tile] = run_model(run_info)
+            unfinished_runs = distribute_remaining_runs(run_info);
+            
             if run_info.PARA.number_of_cores > 1
                 poolobj = gcp('nocreate'); % If no pool, do not create new one.
                 if isempty(poolobj)
@@ -66,39 +68,37 @@ classdef RUN_SPATIAL_SPINUP_stagger < matlab.mixin.Copyable
                 end
 
                 spmd
-                    [run_info, tile] = run_model_parallel(run_info);
+                    [run_info, tile] = run_model_parallel(run_info, unfinished_runs);
                 end
                 
                 delete(poolobj);
             else
-                [run_info, tile] = run_model_sequential(run_info);
+                [run_info, tile] = run_model_sequential(run_info, unfinished_runs);
             end
         end
 
-        function [run_info, tile] = run_model_parallel(run_info)
+        function [run_info, tile] = run_model_parallel(run_info, unfinished_runs)
             tile = 0;
             worker_number = spmdIndex();
             
             pause_duration = (worker_number-1) * run_info.PARA.stagger_interval;
-            fprintf('Worker %d pausing for %d seconds to stagger start times...\n', worker_number, pause_duration);
+            fprintf('Worker %d paused for %d seconds to stagger start times...\n', worker_number, pause_duration);
             pause(pause_duration); %stagger worker start times to reduce file access conflicts
 
-            number_spatial_points = size(run_info.SPATIAL.STATVAR.key,1);
-            max_number_of_gridcells = min(run_info.PARA.number_of_cores, size(run_info.SPATIAL.STATVAR.key,1));
-            number_of_runs = number_spatial_points ./ max_number_of_gridcells;
-            run_raster = [0; round([number_of_runs : number_of_runs : number_spatial_points]')];
-            run_raster = [run_raster(1:end-1,1)+1 run_raster(2:end,1)];
+            runs = unfinished_runs(worker_number, :);
+            runs = runs(runs > 0);  % some runs may be assigned a 0 index as padding
 
-            if worker_number <= size(run_raster,1)
-                for run_number = run_raster(worker_number,1):run_raster(worker_number,2)
-                    [run_info, tile] = run_TILE(run_info, worker_number, run_number);
+            if size(runs, 1) > 0
+                for run_number = runs
+                        [run_info, tile] = run_TILE(run_info, worker_number, run_number);
                 end
             end
         end
 
-        function [run_info, tile] = run_model_sequential(run_info)
+        function [run_info, tile] = run_model_sequential(run_info, unfinished_runs)
             tile = 0;
-            for run_number = 1:size(run_info.SPATIAL.STATVAR.key,1)
+            unfinished_runs = unfinished_runs(unfinished_runs > 0);
+            for run_number = unfinished_runs
                 [run_info, tile] = run_TILE(run_info, 1, run_number);
             end
         end
@@ -128,7 +128,30 @@ classdef RUN_SPATIAL_SPINUP_stagger < matlab.mixin.Copyable
         end
     end
 
+
     methods (Access = private)
+        function distributed_run_numbers = distribute_remaining_runs(run_info)
+            unfinished_runs = get_unfinished_runs(run_info);
+            ncpus = min(run_info.PARA.number_of_cores, size(unfinished_runs,1));
+
+            padsize = ncpus- mod(size(unfinished_runs, 1), ncpus);
+            runs_padded = padarray(unfinished_runs, padsize, 'post');
+            distributed_run_numbers = reshape(runs_padded, ncpus, []);
+        end
+
+        function unfinished_runs = get_unfinished_runs(run_info)
+            
+            num_spatial_points = size(run_info.SPATIAL.STATVAR.key,1);
+            run_finished = zeros(num_spatial_points, 1);
+            for i = 1:num_spatial_points
+                fname = make_final_tile_output_fname(run_info, i);
+                run_finished(i, 1) = isfile(fname);
+            end
+            
+            unfinished_runs = find(~run_finished);
+
+        end
+        
         function name = make_final_tile_output_fname(run_info, run_number)
             % This is quite an ugly function in that it doesn't generalise
             % to other configs, but it does the trick - creates the
@@ -149,7 +172,7 @@ classdef RUN_SPATIAL_SPINUP_stagger < matlab.mixin.Copyable
 
         function [run_info, tile] = run_TILE(run_info, worker_number, run_number)
             % Shared spin-up sequence across TILE parallel/sequential.
-
+            
             fname = make_final_tile_output_fname(run_info, run_number);
             
             if isfile(fname)

@@ -60,7 +60,7 @@ classdef RUN_SPATIAL_SPINUP_stagger < matlab.mixin.Copyable
 
         function [run_info, tile] = run_model(run_info)
             unfinished_runs = distribute_remaining_runs(run_info);
-            fprintf("Remaining runs: %d", sum(unfinished_runs > 0))
+            fprintf("Remaining runs: %d", sum(unfinished_runs > 0, 'all'))
             
             if run_info.PARA.number_of_cores > 1
                 poolobj = gcp('nocreate'); % If no pool, do not create new one.

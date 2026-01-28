@@ -82,13 +82,15 @@ check-progress: check-name  ## Check number of files in the run directory
 	@echo "Number of files: $(NFILES)"
 
 show-logs: check-name  ## Show the SLURM log file
+	@echo "======================================================================="
 	@echo "$(LOCAL_PATH)/log_slurm_job.err (last 50 lines):"
+	@echo "-----------------------------------------------------------------------"
 	@tail -n 50 $(LOCAL_PATH)/log_slurm_job.err
 	@echo ""
-	@echo "==================================================="
 	@echo ""
+	@echo "======================================================================="
 	@echo "$(LOCAL_PATH)/log_slurm_job.out (last 50 lines):"
-	@echo ""
+	@echo "-----------------------------------------------------------------------"
 	@tail -n 50 $(LOCAL_PATH)/log_slurm_job.out
 
 # --- Guards & Helpers ---

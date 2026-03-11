@@ -17,9 +17,17 @@ export S3_ENDPOINT_URL := https://os.zhdk.cloud.switch.ch
 export AWS_REQUEST_CHECKSUM_CALCULATION := WHEN_REQUIRED
 export AWS_RESPONSE_CHECKSUM_VALIDATION := WHEN_REQUIRED
 
-# Variable priority: 1. CLI (name=x) 2. .env (CRYOGRID_RUN_NAME)
+# Variable priority: 1. CLI (name=x) 2. positional arg 3. .env (CRYOGRID_RUN_NAME)
+POSITIONAL_NAME_TARGETS := set-run-name download-run upload-run submit-run check-progress show-logs
+POSITIONAL_NAME := $(if $(filter $(firstword $(MAKECMDGOALS)),$(POSITIONAL_NAME_TARGETS)),$(word 2,$(MAKECMDGOALS)))
+
+ifneq ($(POSITIONAL_NAME),)
+%:
+	@:
+endif
+
 LAST_DATE  := 20241231
-RUN_NAME   := $(or $(name),$(CRYOGRID_RUN_NAME))
+RUN_NAME   := $(or $(name),$(POSITIONAL_NAME),$(CRYOGRID_RUN_NAME))
 LOCAL_PATH := $(RUNS_DIR)/$(RUN_NAME)
 S3_PATH    := $(S3_PATH_PREFIX)/$(RUN_NAME)/
 NAME_TEMPLATE := $(RUN_NAME)_*_$(LAST_DATE).mat  # pamir1500-mswep-dry_*_20241231.mat
@@ -27,7 +35,7 @@ NAME_TEMPLATE := $(RUN_NAME)_*_$(LAST_DATE).mat  # pamir1500-mswep-dry_*_2024123
 .PHONY: help init install-aws download upload submit check-env check-name check-aws
 
 help: ## Show this help message
-	@echo "\033[1mUSAGE: make [target] [name=run-name]\033[0m"
+	@echo "\033[1mUSAGE: make [target] [name=run-name|run-name]\033[0m"
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "   \033[36m%-15s\033[0m  %s\n", $$1, $$2}'
 	@echo "\033[1mCONFIGURATION\033[0m"
 	@echo "   CRYOGRID_RUN_NAME  \033[1;33m$(RUN_NAME)\033[0m"
@@ -49,6 +57,11 @@ install-aws:
 		./aws/install -i $(HOME)/.aws-cli -b $(HOME)/.local/bin --update; \
 		echo "Installation complete. Ensure $(HOME)/.local/bin is in your PATH."; \
 	fi
+
+set-run-name:  ## changes CRYOGRID_RUN_NAME in .env ("make set-run-name run-name")
+	@echo "Setting CRYOGRID_RUN_NAME in .env to $(RUN_NAME)"
+	@[ -f .env ] || touch .env
+	@awk -v run_name="$(RUN_NAME)" 'BEGIN { updated = 0 } /^CRYOGRID_RUN_NAME=/ { print "CRYOGRID_RUN_NAME=" run_name; updated = 1; next } { print } END { if (!updated) print "CRYOGRID_RUN_NAME=" run_name }' .env > .env.tmp && mv .env.tmp .env
 	
 forcing: check-aws check-env check-name 
 	@echo "Syncing cryogrid-forcing from $(S3_PATH_FORCING) to $(FORCING_DIR)"
@@ -104,5 +117,5 @@ endif
 
 check-name:
 ifeq ($(RUN_NAME),)
-	$(error RUN_NAME is not set. Use name=... or set CRYOGRID_RUN_NAME in .env)
+	$(error RUN_NAME is not set. Use name=..., pass it positionally, or set CRYOGRID_RUN_NAME in .env)
 endif

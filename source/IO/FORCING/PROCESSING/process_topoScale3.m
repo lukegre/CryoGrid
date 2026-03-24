@@ -28,12 +28,13 @@ classdef process_topoScale3 < process_BASE
 
     methods
         function proc = provide_PARA(proc)
+            proc.PARA.downscale_below_era5_surface = 0;
+            proc.PARA.forcing_steps_per_day = 24;
         end
         
         function proc = provide_CONST(proc)
             proc.CONST.Tmfw = [];
             proc.CONST.sigma = [];
-            proc.CONST.downscale_below_era5_surface = 0;
         end
         
         function proc = provide_STATVAR(proc)
@@ -43,6 +44,8 @@ classdef process_topoScale3 < process_BASE
         end
         
         function forcing = process(proc, forcing, tile)
+            
+            downscale_below_era5_surface = proc.PARA.downscale_below_era5_surface;
             
             disp('applying downscaling with TopoScale3')
             era = forcing.TEMP.era;
@@ -59,7 +62,6 @@ classdef process_topoScale3 < process_BASE
             n_levels = size(era.p, 2);
             n_coords = 4;
             
-
             % PREPARING COORDINATE WEIGHTS FOR WEIGHTED AVERAGES
             [weights_lat, weights_lon, ind_lat, ind_lon] = proc.calc_horz_weights(point.lat, point.lon, lat_grid, lon_grid, n_timesteps);
             inds = struct('lat', ind_lat, 'lon', ind_lon);
@@ -68,38 +70,31 @@ classdef process_topoScale3 < process_BASE
             era_alt_sl = reshape(era.Zs(inds.lon, inds.lat), n_coords, 1);
             era_alt_sl = repmat(era_alt_sl, 1, 1, n_timesteps);  % lat_lon, level, timestep
             
-            downscale_below_era5_surface = proc.CONST.downscale_below_era5_surface;
-            [weights_Z_below, weights_Z_above, factor] = proc.calc_vert_weights(point.alt, era_alt, era_alt_sl, n_levels, downscale_below_era5_surface);
+            [weights_Z_below, weights_Z_above, factor] = proc.calc_vert_weights(point.alt, era_alt, era_alt_sl, n_levels);
             weights = struct('lat', weights_lat, 'lon', weights_lon, 'Z_above', weights_Z_above, 'Z_below', weights_Z_below, 'factor', factor);
             
-
             % FUNCTIONS FOR SELECTING DATA
             select_surf = @(var) double(var(inds.lon, inds.lat, :));
             % select_surf -> (2 x 2 x t)
             select_3D = @(var) double(var(inds.lon, inds.lat, :, :));
             % select_3d -> (2 x 2 x levels x t)
             
-            
             % DOWNSCALING TEMPERATURE 
             era_T = select_3D(era.T) .* era.T_sf;
             era_T_sl = select_surf(era.T2) .* era.T_sf;
             % downscale_3D first does vertical downscaling, then horizontal using downscale_2D
             % downscale_3D -> (t x 1)
-            T_topoScale = proc.downscale_3D_var(era_T, era_T_sl, weights, point.alt, era_alt_sl, downscale_below_era5_surface);
-            % for testing
-            era_T_sl_downscaled = proc.downscale_2D_var(era_T_sl, weights);
-            
+            T_topoScale = proc.downscale_3D_var(era_T, era_T_sl, weights, point.alt, era_alt, era_alt_sl, downscale_below_era5_surface);
             
             % DOWNSCALING WIND SPEED
-            era_u = select_3D(era.u) .* era.wind_sf;
-            era_v = select_3D(era.v) .* era.wind_sf;
             era_u10 = select_surf(era.u10) .* era.wind_sf;
             era_v10 = select_surf(era.v10) .* era.wind_sf;
-            era_wind = proc.calc_wind_speed(era_u, era_v);
-            era_wind_sl = proc.calc_wind_speed(era_u10, era_v10);
-            wind_topoScale = proc.downscale_3D_var(era_wind, era_wind_sl, weights, point.alt, era_alt_sl, downscale_below_era5_surface);
+            era_u = select_3D(era.u) .* era.wind_sf;
+            era_v = select_3D(era.v) .* era.wind_sf;
+            era_u_TopoScale = proc.downscale_3D_var(era_u, era_u10, weights, point.alt, era_alt, era_alt_sl, downscale_below_era5_surface);
+            era_v_TopoScale = proc.downscale_3D_var(era_v, era_v10, weights, point.alt, era_alt, era_alt_sl, downscale_below_era5_surface);
+            wind_topoScale = proc.calc_wind_speed(era_u_TopoScale, era_v_TopoScale);
             
-
             % DOWNSCALING PRESSURE
             % Since pressure does not exist in ERA5, we compute it from Z-pressure levels
             era_p = repmat(era.p, n_coords, 1, n_timesteps);  % dims = 4, 6, t
@@ -107,7 +102,6 @@ classdef process_topoScale3 < process_BASE
             p_topoScale = sum(era_p .* (weights.Z_above + weights.Z_below), 2);
             p_topoScale = proc.barometric_formula(p_topoScale, era_p_sl, point.alt, era_alt_sl, era_T_sl);
             p_topoScale = proc.downscale_2D_var(p_topoScale, weights);
-
 
             % DOWNSCALING HUMIDITY
             % era_q = select_3D(era.q) .* era.q_sf;  % humidity
@@ -118,9 +112,7 @@ classdef process_topoScale3 < process_BASE
             % in the original code, era_q was downscaled, and later q_topoScale recomputed with the code below. 
             % The latter is more accurate, so I use this directly
             q_topoScale = proc.epsilon0 .* RH_topoScale_sl .* proc.magnus_formula(T_topoScale) ./ p_topoScale;
-            % q_topoScale = proc.downscale_3D_var(era_q, era_q_sl, weights, point.alt, era_alt_sl);
             
-
             % DOWNSCALING LONGWAVE RADIATION
             % in the original process_topoScale function, humidity used for downscaling is not the final version of the humidity that is
             % later stored - in this version, we use the final humidity, meaning that results are slightly different to the original. 
@@ -145,7 +137,6 @@ classdef process_topoScale3 < process_BASE
             aef = cef + deltae;  % Use the former cloud emissivity to compute the all sky emissivity at subgrid.
             Lin_topoScale = aef .* sbc .* TK_topoScale.^4;
             
-
             % DOWNSCALING SHORTWAVE RADIATION
             era_Sin_sl = select_surf(era.SW) .* era.rad_sf;
             era_Sin_sl = proc.downscale_2D_var(era_Sin_sl, weights);
@@ -165,22 +156,21 @@ classdef process_topoScale3 < process_BASE
             Sin_dir_topoScale = era_Sin_sl - Sin_diff_topoScale; % Direct shortwave radiation
             Sin_dir_topoScale = era_S_TOA_point .* (Sin_dir_topoScale ./ (max(1e-10, era_S_TOA_point))).^(p_topoScale ./ era_p_sl2);
 
-
             % DOWNSCALING PRECIPITATION
-            adjf = proc.precipitation_adjustment_factor; 
             era_precip_sl = select_surf(era.P) .* era.P_sf;
             era_precip_sl = proc.downscale_2D_var(era_precip_sl, weights);
             era_alt_sl2 = proc.downscale_2D_var(era_alt_sl, weights);
-
+            
             %  Apply Liston & Elder (MicroMet) elevation-based precip adjustment
             dZ = point.alt - era_alt_sl2; % m
             dZ = dZ ./ 1e3; % km
             dZ = min(dZ, 2); % No larger that 2 km=3.3 adjustment
             dZ = max(dZ, -2);% For symmetry
+            adjf = proc.precipitation_adjustment_factor; 
             adj = (1 + adjf .* dZ) ./ (1 - adjf .* dZ);
-            precip_topoScale = era_precip_sl .* adj .* 24; %in mm/day, check if timestep must be taken into account when not using 1h input data
+            n_steps = proc.PARA.forcing_steps_per_day;
+            precip_topoScale = era_precip_sl .* adj .* n_steps; %in mm/day, check if timestep must be taken into account when not using 1h input data
             
-
             % HOUSEKEEPING AND SETTING UP STRUCTS
             forcing.DATA.Tair = double(T_topoScale);
             forcing.DATA.q = double(q_topoScale);
@@ -212,11 +202,9 @@ classdef process_topoScale3 < process_BASE
 
     methods(Static)
 
-        function var = update_variable(var, var_sl, merge_w_sl, use_sl, factor)
-            var = double(~merge_w_sl) .* var + double(merge_w_sl) .* factor .* var + double(merge_w_sl) .* (1-factor) .* double(var_sl);
-            var = double(~use_sl) .* var + double(use_sl) .* double(var_sl);
-        end
-
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % DOWNSCALING-RELATED FUNCTIONS %
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function [weights_lat, weights_lon, ind_lat, ind_lon] = calc_horz_weights(lat_point, lon_point, lat_grid, lon_grid, n_timesteps)
 
             dist_lat = abs(lat_point - lat_grid);
@@ -242,60 +230,49 @@ classdef process_topoScale3 < process_BASE
             
         end
         
-        function [weights_above, weights_below, factor] = calc_vert_weights(alt_point, era_alt, era_alt_sl, n_levels, downscale_below_era5_surface)
+        function [weights_above, weights_below, factor] = calc_vert_weights(alt_point, era_alt, era_alt_sl, n_levels)
             
-            if nargin <= 4
-                downscale_below_era5_surface = 1;
-            elseif nargin == 5
-                assert(downscale_below_era5_surface == 0 | downscale_below_era5_surface == 1, "downscale_below_era5_surface must be [0,1]");
-            end
-            layer_below = int16(era_alt .* 0);
             layer_above = int16(era_alt .* 0);
-            
-            %do another one to get the lowermost pl above the orography
+            layer_below = int16(era_alt .* 0);
+
             for i = 2:n_levels
-                level_a = era_alt(:,i,:);
-                level_b = era_alt(:,i-1,:);
+                lower_level = era_alt(:,i,:);
+                upper_level = era_alt(:,i-1,:);
 
-                point_lt_grid1 = level_a < alt_point;
-                grid0_gt_point = level_b >= alt_point;
-                
-                % this is added so that valleys can also be included for very mountainous areas
-                if downscale_below_era5_surface
-                    a_above_orography = level_a > era_alt_sl;
-                    b_above_orography = level_b > era_alt_sl;
-                else
-                    a_above_orography = 1;
-                    b_above_orography = 1;
-                end
-
-                layer_below(:,  i,:) = double(point_lt_grid1 & grid0_gt_point & a_above_orography);
-                layer_above(:,i-1,:) = double(point_lt_grid1 & grid0_gt_point & b_above_orography);
+                upper_above_point = upper_level >= alt_point;
+                lower_below_point = lower_level < alt_point;
+                upper_above_surface = upper_level > era_alt_sl;
+                lower_above_surface = lower_level > era_alt_sl;
+                layer_above(:,i-1,:) = double(lower_below_point & upper_above_point & upper_above_surface);
+                layer_below(:,  i,:) = double(lower_below_point & upper_above_point & lower_above_surface);
             end
             
             distance_Z_above = abs(sum(era_alt .* layer_above, 2) - alt_point) .* double(sum(layer_above, 2) > 0);
             distance_Z_below = abs(sum(era_alt .* layer_below, 2) - alt_point) .* double(sum(layer_below, 2) > 0);
             
-            weights_Z_above = 1-distance_Z_above ./ max(1e-10, distance_Z_above + distance_Z_below);
-            weights_Z_below = 1-distance_Z_below ./ max(1e-10, distance_Z_above + distance_Z_below);
+            dist_norm = max(1e-10, distance_Z_above + distance_Z_below);
+            weights_Z_above = 1 - (distance_Z_above ./ dist_norm);
+            weights_Z_below = 1 - (distance_Z_below ./ dist_norm);
             
             weights_above = repmat(weights_Z_above, 1, size(layer_above,2),1) .* double(layer_above);
             weights_below = repmat(weights_Z_below, 1, size(layer_below,2),1) .* double(layer_below);
 
+            % factor represents how close the point is to the nearest level above, 
+            % with 1 being very close and 0 being very far (>=100m)
             factor = min(1, max(0, distance_Z_above./100));
             
         end
         
-        function var = downscale_3D_var(var4d, var_surf, weights, alt_point, era_alt_sl, downscale_below_era5_surface)
+        function var = downscale_3D_var(var4d, var_surf, weights, alt_point, era_alt, era_alt_sl, downscale_below_era5_surface)
             class = process_topoScale3;
 
-            if nargin <= 5
+            if nargin <= 6
                 downscale_below_era5_surface = 1;
-            elseif nargin == 6
+            elseif nargin == 7
                 assert(downscale_below_era5_surface == 0 | downscale_below_era5_surface == 1, "downscale_below_era5_surface must be [0,1]");
             end
 
-            % Function can be applied to temperature (T), wind, and humidity (q)
+            % Function is applied to temperature (T) and wind
             % takes var3d where variables have already been selected
             
             % VARIABLE PREPARATION
@@ -308,25 +285,67 @@ classdef process_topoScale3 < process_BASE
             
             % VERTICAL DOWNSCALING
             var3d = sum(double(var3d) .* weights_Z, 2);
-            
-            % This part needs to change if we don't want the bottom layer to be used
-            if downscale_below_era5_surface
-                is_above_orography = alt_point < era_alt_sl;
-            else
-                is_above_orography = 0;
-            end
-            use_sl = sum(weights_Z, 2) < 1-1e-9   |   is_above_orography;
-            merge_w_sl = sum(weights.Z_below, 2) == 0;
 
-            term1 = double(~merge_w_sl) .* var3d;
-            term2 = double( merge_w_sl) .* var3d .* weights.factor;
-            term3 = double( merge_w_sl) .* var_surf .* (1 - weights.factor);
+            % SPECIAL CONDITIONS FOR POINTS BELOW THE LOWEST ERA5 LEVEL
+            % 1) no era levels below, but near enough the surface level
+            %   a) standard case - bracketed by levels above and below, so we can rely on vertical interpolation
+            %   b) if closer to the nearest pressure level above than to the surface, rely more on pressure level value
+            %   c) if closer to the surface than to the nearest pressure level above, rely more on surface value
+            merge_w_sl = sum(weights.Z_below, 2) == 0;  % no level below point, so merge with surface             
+            point_bracketed_by_levels = double(~merge_w_sl) .* var3d; 
+            weighted_more_by_press_level = double( merge_w_sl) .* var3d .* weights.factor;   
+            weighted_more_by_surface     = double( merge_w_sl) .* var_surf .* (1 - weights.factor);  
+            var3d = point_bracketed_by_levels + weighted_more_by_press_level + weighted_more_by_surface;
             
-            var3d = double(~use_sl) .* (term1 + term2 + term3) + double(use_sl) .* var_surf;
+            % 2) point is below the lowest ERA5 level
+            %   a) if chosen, use lapse rate to extrapolate below the ERA5 surface level
+            %   b) if not, use the surface value to fully represent the point below the ERA5 surface level
+            if downscale_below_era5_surface
+                n_valid = sum(double(era_alt > era_alt_sl), 2);
+                % if we choose to downscale below the era5 surface, then use lapse rate
+                lapse_rate = process_topoScale3.calc_lapse_rate(var4d, era_alt, era_alt_sl);
+                extrapolated = var_surf + lapse_rate .* (alt_point - era_alt_sl);
+                % var_surf is now actually the extrapolated value for points below the ERA5 surface
+                var_surf = double(n_valid >= 2) .* extrapolated + double(n_valid < 2) .* var_surf;
+            end
+
+            point_below_era5_surface = (alt_point < era_alt_sl) | sum(weights_Z, 2) < (1 - 1e-9);
+            var3d = ( ...
+                    double(~point_below_era5_surface) .* var3d + ... keep original values
+                    double( point_below_era5_surface) .* var_surf ... if below ERA5 surface
+                );
             
             % HORIZONTAL DOWNSCALING
             var = class.downscale_2D_var(var3d, weights);
             
+        end
+
+        function lapse_rate = calc_lapse_rate(var4d, era_alt, era_alt_sl)
+            [n_lon, n_lat, n_levels, n_timesteps] = size(var4d);
+            var3d = reshape(var4d, n_lon * n_lat, n_levels, n_timesteps);
+
+            % find the lapse rate based on the lowest 2 levels above surface, if there are at least 2 levels above surface.
+            valid = era_alt > era_alt_sl;  % (n_coords, n_levels, n_timesteps)
+            n_valid = sum(double(valid), 2);
+            valid = valid & repmat(n_valid >= 2, 1, size(valid,2), 1);  % Only consider levels if there are at least 2 valid levels
+            
+            % find points above surface, 1 = nearest, 2 = second nearest, etc.
+            index = flip(cumsum(flip(valid, 2),2), 2);  
+            valid_lower = valid & (index == 1);
+            valid_upper = valid & (index == 2);
+
+            var3d = double(var3d);
+            era_alt = double(era_alt);
+
+            temp_lower = var3d(valid_lower);
+            temp_upper = var3d(valid_upper);
+
+            alt_lower = era_alt(valid_lower);
+            alt_upper = era_alt(valid_upper);
+            
+            lapse_rate = -999 .* ones(size(valid), 'like', var3d);
+            lapse_rate(valid_lower) = (temp_upper - temp_lower) ./ (alt_upper - alt_lower);
+            lapse_rate = max(lapse_rate, [], 2);
         end
 
         function var1d = downscale_2D_var(var2d, weights)
@@ -346,6 +365,9 @@ classdef process_topoScale3 < process_BASE
 
         end
 
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % FUNCTIONS FOR CALCULATING VARIABLES %
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function wind_speed = calc_wind_speed(u, v)
             wind_speed = sqrt(single(u).^2 + single(v).^2);
         end
